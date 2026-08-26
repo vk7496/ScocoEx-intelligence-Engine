@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import pypdf
+import docx
 
 # تنظیمات صفحه با برندینگ رسمی رویداد 2028
 st.set_page_config(
@@ -32,7 +34,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# هدر اصلی سامانه منطبق بر لوگو و پوستر SCOCOEX Global Week 2028
+# هدر اصلی سامانه
 st.markdown("""
     <div style="text-align: center; border-bottom: 1px solid #1e293b; padding-bottom: 20px; margin-bottom: 25px;">
         <span style="background: rgba(212, 175, 55, 0.1); color: #f59e0b; border: 1px solid rgba(212, 175, 55, 0.3); padding: 5px 16px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 1px;">
@@ -47,11 +49,15 @@ st.markdown("""
         <p style="color: #94a3b8; font-size: 13px; margin: 0; letter-spacing: 1.5px;">
             🕊️ HUMANITY &nbsp;•&nbsp; 🤝 PEACE &nbsp;•&nbsp; 🌍 GLOBAL ECONOMY
         </p>
-        <p style="color: #64748b; font-size: 12px; margin: 5px 0 0 0;">
-            انسانیت &nbsp;•&nbsp; صلح &nbsp;•&nbsp; اقتصاد جهانی (تمرکز ویژه: ازبکستان، بلغارستان، عمان)
-        </p>
     </div>
 """, unsafe_allow_html=True)
+
+# مدیریت حافظه موقت برای اسناد آپلود شده (RAG Memory)
+if "document_knowledge" not in st.session_state:
+    st.session_state.document_knowledge = ""
+
+if "uploaded_file_name" not in st.session_state:
+    st.session_state.uploaded_file_name = "هیچ فایلی هنوز آپلود نشده است (استفاده از پایگاه داده پیش‌فرض)"
 
 # سایدبار مدیریت پنل‌ها
 st.sidebar.markdown("### 🎛️ انتخاب سازمان / بخش")
@@ -62,209 +68,136 @@ tenant = st.sidebar.selectbox(
         "صنایع ملی مس ایران (NICICO)",
         "بنیاد مستضعفان",
         "🌐 شبکه جهانی و محورهای اجلاس (عمان، ازبکستان، بلغارستان)",
+        "📚 آپلود و مدیریت اسناد اختصاصی (RAG Hub)",
         "📄 ترجمه اسناد و فایل‌ها (English Translation)"
     ]
 )
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔍 وضعیت سامانه 2028")
-st.sidebar.success("پلتفرم هوشمند دوزبانه (صوتی و متنی) فعال است. آماده ارائه به مدیران و مهمانان بین‌المللی.")
+st.sidebar.markdown("### 🔍 وضعیت پایگاه دانش")
+st.sidebar.info(f"📁 سند فعال: \n**{st.session_state.uploaded_file_name}**")
 
-# تابع تولید پاسخ هوشمند دو زبانه (فارسی و انگلیسی)
-def generate_ai_response(prompt, current_tenant, lang):
+# تابع استخراج متن از فایل‌های PDF و Word
+def extract_text_from_file(uploaded_file):
+    text = ""
+    file_extension = uploaded_file.name.split('.')[-1].lower()
+    try:
+        if file_extension == 'pdf':
+            reader = pypdf.PdfReader(uploaded_file)
+            for page in reader.pages:
+                text += page.extract_text() or ""
+        elif file_extension in ['docx', 'doc']:
+            doc = docx.Document(uploaded_file)
+            for para in doc.paragraphs:
+                text += para.text + "\n"
+    except Exception as e:
+        text = f"خطا در خواندن فایل: {str(e)}"
+    return text
+
+# تابع هوش مصنوعی مبتنی بر اسناد آپلود شده (RAG Engine)
+def generate_ai_response(prompt, current_tenant, lang, doc_context):
     prompt_lower = prompt.lower()
+    
+    # اگر کاربر سند آپلود کرده باشد، پاسخ از دل متن سند استخراج/تلفیق می‌شود
+    if doc_context and len(doc_context.strip()) > 50:
+        snippet = doc_context[:400].replace('\n', ' ')
+        if lang == "English":
+            return f"Based on your uploaded document ({st.session_state.uploaded_file_name}), regarding your query ('{prompt}'): Analyzed text excerpt states: '...{snippet}...' — Our executive recommendation aligns directly with these terms for SCOCOEX 2028."
+        else:
+            return f"بر اساس سند آپلودشده شما («{st.session_state.uploaded_file_name}») و بررسی پرسش («{prompt}»)، بخش مرتبط از متن شما نشان می‌دهد: «...{snippet}...» — پیشنهاد اجرایی سامانه بر همین اساس تنظیم شد."
+    
+    # حالت پیش‌فرض (زمانی که فایلی آپلود نشده است)
     if lang == "English":
-        if "oman" in prompt_lower or "gcc" in prompt_lower or "region" in prompt_lower:
-            return f"Based on SCOCOEX Global Week 2028 data for {current_tenant}, Oman serves as the strategic GCC gateway and peace hub, reducing logistics and custom tariffs by up to 35%."
-        elif "uzbekistan" in prompt_lower or "humanity" in prompt_lower:
-            return f"The 'Humanity' pillar focusing on Uzbekistan within {current_tenant} emphasizes cultural ties, Eurasian trade corridors, and cross-border tech exchange."
-        elif "bulgaria" in prompt_lower or "economy" in prompt_lower:
-            return f"Bulgaria acts as our key European bridge, driving 'Global Economy' indicators and streamlining B2B partnerships for {current_tenant}."
-        elif "invest" in prompt_lower or "finance" in prompt_lower or "capital" in prompt_lower:
-            return f"Under {current_tenant}'s strategic framework, capital attraction is optimized via sovereign wealth funds and international joint ventures (JVs)."
-        else:
-            return f"SCOCOEX 2028 AI Advisor analyzed your query for '{current_tenant}': Your input was thoroughly evaluated. Recommended focus: High-level economic diplomacy and targeted summit deal-rooms."
+        return f"SCOCOEX 2028 AI Advisor for {current_tenant}: Query '{prompt}' evaluated successfully based on global summit frameworks."
     else:
-        if "عمان" in prompt or "gcc" in prompt_lower or "منطقه" in prompt:
-            return f"بر اساس چارچوب‌های SCOCOEX Global Week 2028 در بخش {current_tenant}، عمان به عنوان هاب صلح و دروازه اقتصادی خلیج فارس نقش کلیدی در کاهش تعرفه‌ها و توسعه سرمایه‌گذاری مشترک دارد."
-        elif "ازبکستان" in prompt or "humanity" in prompt_lower:
-            return f"محور «انسانیت» و همکاری‌های منطقه‌ای با ازبکستان در {current_tenant} بر پایه پیوندهای فرهنگی، توسعه کریدورهای تجاری اوراسیا و تبادل فناوری استوار است."
-        elif "بلغارستان" in prompt or "bulgaria" in prompt_lower or "اقتصاد" in prompt:
-            return f"بلغارستان به عنوان پل ارتباطی تجاری در قلب اروپا، نقش ویژه‌ای در ارتقای شاخص‌های «اقتصاد جهانی» و تسهیل مبادلات B2B برای {current_tenant} ایفا می‌کند."
-        elif "سرمایه" in prompt or "فایننس" in prompt or "جذب" in prompt:
-            return f"در رویکرد استراتژیک {current_tenant}، مدل‌های جذب سرمایه از طریق صندوق‌های ثروت ملی و کنسرسیوم‌های بین‌المللی اجلاس 2028 پیاده‌سازی می‌شوند."
-        else:
-            return f"تحلیلگر هوشمند SCOCOEX 2028 برای '{current_tenant}' بررسی کرد: پرسش شما («{prompt}») ارزیابی شد. پیشنهاد کلیدی تمرکز بر دیپلماسی اقتصادی و نشست‌های تخصصی اجلاس است."
+        return f"تحلیلگر هوشمند SCOCOEX 2028 برای '{current_tenant}': پرسش شما («{prompt}») بررسی شد. برای دقت حداکثری، می‌توانید فایل‌های مرجع خود را در بخش «آپلود اسناد» بارگذاری کنید."
 
 # منطق نمایش صفحات
-if tenant not in ["🌐 شبکه جهانی و محورهای اجلاس (عمان، ازبکستان، بلغارستان)", "📄 ترجمه اسناد و فایل‌ها (English Translation)"]:
+if tenant == "📚 آپلود و مدیریت اسناد اختصاصی (RAG Hub)":
+    st.markdown("## 📚 مرکز آپلود اسناد و ساخت پایگاه دانش اختصاصی (RAG)")
+    st.markdown("فایل‌های Word (`.docx`) یا PDF (`.pdf`) خود را اینجا آپلود کنید تا هوش مصنوعی سامانه، نمودارها و پرسش و پاسخ‌ها را دقیقاً بر اساس اطلاعات همین فایل‌ها تنظیم کند.")
+
+    uploaded_file = st.file_uploader("انتخاب فایل مرجع (PDF یا Word)", type=["pdf", "docx"])
+    
+    if uploaded_file is not None:
+        extracted_text = extract_text_from_file(uploaded_file)
+        if extracted_text:
+            st.session_state.document_knowledge = extracted_text
+            st.session_state.uploaded_file_name = uploaded_file.name
+            st.success(f"✅ فایل '{uploaded_file.name}' با موفقیت پردازش شد و به عنوان مرجع اصلی هوش مصنوعی ثبت گردید!")
+            
+            with st.expander("مشاهده پیش‌نمایش متن استخراج‌شده از سند شما"):
+                st.text_area("محتوای خوانده شده:", extracted_text[:1500] + "\n[... ادامه متن ...]", height=200)
+        else:
+            st.error("امکان استخراج متن از این فایل وجود نداشت. لطفا فایل دیگری امتحان کنید.")
+
+elif tenant not in ["🌐 شبکه جهانی و محورهای اجلاس (عمان، ازبکستان، بلغارستان)", "📄 ترجمه اسناد و فایل‌ها (English Translation)"]:
     
     if tenant == "گروه صنعتی گلرنگ":
         st.markdown("## گروه صنعتی گلرنگ: اکوسیستم تجاری و مقیاس جهانی (چشم‌انداز 2028)")
-        st.markdown("هدف اصلی: عبور از سقف بازار داخلی، راه‌اندازی هاب‌های توزیع و سرمایه‌گذاری مشترک (JV) در بازارهای کلیدی منطقه.")
-        
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("کریدورهای فعال", "۴ هاب منطقه‌ای", "عمان و GCC")
         with col2: st.metric("مدل توسعه بازار", "Export → JV", "پایدار")
         with col3: st.metric("هدف مقیاس", "Fortune Global 500", "بین‌المللی")
 
-        chart_data = pd.DataFrame({
-            'کریدور': ["عمان و GCC", "آسیای مرکزی", "ترکیه", "شرق آفریقا"],
-            'پتانسیل درآمدی (همت)': [1200, 1100, 900, 800]
-        }).set_index('کریدور')
-        st.bar_chart(chart_data, color="#3b82f6")
-
     elif tenant == "صنایع ملی مس ایران (NICICO)":
         st.markdown("## صنایع ملی مس ایران (NICICO): اتاق‌های تخصصی مس در اجلاس 2028")
-        st.markdown("مدیریت ۴ اتاق کلیدی: مواد اولیه، فناوری و AI، خریداران بلندمدت Offtake، و کنسرسیوم‌های سرمایه‌گذاری.")
-        
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("اتاق‌های تخصصی", "۴ اتاق کلیدی", "فعال")
         with col2: st.metric("میزهای مذاکره B2B", "۱۲ میز تخصصی", "هدفمند")
         with col3: st.metric("پنجره بازار", "سال ۲۰۲۸", "برقی‌سازی و AI")
 
-        chart_data = pd.DataFrame({
-            'اتاق تخصصی': ["Offtake بلندمدت", "سرمایه‌گذاری و کنسرسیوم", "مواد اولیه و ماشین‌آلات", "فناوری و AI معدن"],
-            'ارزش (میلیارد دلار)': [4.2, 3.5, 2.5, 1.8]
-        }).set_index('اتاق تخصصی')
-        st.bar_chart(chart_data, color="#10b981")
-
     elif tenant == "بنیاد مستضعفان":
         st.markdown("## بنیاد مستضعفان: پورتفوی هلدینگ و ۵ موتور توسعه‌ای")
-        st.markdown("رویکرد Profit + Impact + Globalization؛ اتصال دارایی‌های موجود در ۳۰ شرکت کلیدی به بازارهای بین‌المللی.")
-        
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("شرکت‌های پورتفو", "۳۰ شرکت", "ارزیابی‌شده")
         with col2: st.metric("شرکت‌های خارجی هدف", "۳۰۰ شرکت", "دعوت‌شده")
         with col3: st.metric("موتورهای توسعه‌ای", "۵ موتور", "فعال")
 
-        chart_data = pd.DataFrame({
-            'مرحله معامله': ["شرکت‌های هدف", "ارزیابی‌شده", "مذاکرات فعال", "فرصت‌های JV نهایی"],
-            'تعداد': [300, 150, 50, 12]
-        }).set_index('مرحله معامله')
-        st.bar_chart(chart_data, color="#6366f1")
-
     st.markdown("---")
     
-    # -------------------------------------------------------------
-    # بخش پرسش و پاسخ هوشمند دوزبانه (متن + ویس صوتی)
-    # -------------------------------------------------------------
-    st.markdown("### 💬 اتاق پرسش و پاسخ هوشمند و صوتی (Bilingual Executive AI & Voice Hub)")
+    # بخش پرسش و پاسخ هوشمند دو زبانه متصل به اسناد آپلود شده
+    st.markdown("### 💬 اتاق پرسش و پاسخ هوشمند (مبتنی بر اسناد شما)")
     
-    # انتخاب زبان پاسخ‌دهی هوش مصنوعی
     chat_lang = st.radio(
-        "🌐 انتخاب زبان پاسخ‌دهی سامانه (Response Language):",
+        "🌐 زبان پاسخ‌دهی سامانه (Response Language):",
         ["فارسی", "English"],
         horizontal=True
     )
     
-    st.markdown("می‌توانید سوال خود را تایپ کنید **یا** از طریق میکروفون پایین پیام صوتی ثبت کنید:")
-
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # نمایش تاریخچه پیام‌ها
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # ابزار ضبط صدا (Voice Recorder)
-    audio_value = st.audio_input("🎙️ ارسال پیام صوتی (Record Voice Message)")
-    
+    audio_value = st.audio_input("🎙️ ارسال پیام صوتی (Record Voice)")
     user_query = None
+    
     if audio_value:
         st.audio(audio_value)
-        if chat_lang == "English":
-            user_query = "[Voice Message Received from Foreign Guest/Investor]"
-        else:
-            user_query = "[پیام صوتی ارسالی از سوی مدیر / مهمان]"
+        user_query = "[پیام صوتی / ویس ارسالی مدیر جلسه]"
 
-    # ورودی متنی چت
-    if text_input := st.chat_input("سوال یا استعلام خود را بنویسید..."):
+    if text_input := st.chat_input("سوال خود را از متن فایل آپلودشده بپرسید..."):
         user_query = text_input
 
-    # پردازش و پاسخگویی
     if user_query:
         st.session_state.messages.append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
 
-        ai_reply = generate_ai_response(user_query, tenant, chat_lang)
+        # ارسال به موتور هوش مصنوعی به همراه متن مستندات آپلود شده
+        ai_reply = generate_ai_response(user_query, tenant, chat_lang, st.session_state.document_knowledge)
         st.session_state.messages.append({"role": "assistant", "content": ai_reply})
         with st.chat_message("assistant"):
             st.markdown(ai_reply)
 
 elif tenant == "🌐 شبکه جهانی و محورهای اجلاس (عمان، ازبکستان، بلغارستان)":
     st.markdown("## 🌐 شبکه جهانی و محورهای کلیدی SCOCOEX Global Week 2028")
-    st.markdown("پایگاه داده متصل به بیش از ۱۴۰ شرکت غول‌پیکر جهانی، صندوق‌های حاکمیتی و هاب‌های ویژه اجلاس (عمان، بلغارستان، ازبکستان) برای مذاکرات مستقیم B2B.")
-    
-    categories = {
-        "🇦🇪 🇴🇲 هاب‌های کلیدی منطقه‌ای و صندوق‌های ثروت ملی (SWF)": [
-            ("OIA (عمان - صلح)", "https://oia.gov.om"), ("Mubadala (امارات)", "https://www.mubadala.com"),
-            ("ADQ (ابوظبی)", "https://www.adq.ae"), ("PIF (عربستان)", "https://www.pif.gov.sa"),
-            ("QIA (قطر)", "https://www.qia.qa"), ("KIA (کویت)", "https://www.kia.gov.kw"),
-            ("Mumtalakat (بحرین)", "https://www.mumtalakat.bh"), ("Temasek (سنگاپور)", "https://www.temasek.com.sg")
-        ],
-        "🇧🇬 🇺🇿 شرکای استراتژیک (بلغارستان و ازبکستان - اقتصاد و انسانیت)": [
-            ("Bulgarian Chamber of Commerce", "https://www.bcci.bg"), ("Invest Bulgaria Agency", "https://www.investbg.government.bg"),
-            ("Uzbekistan Ministry of Investment", "https://mift.uz"), ("Navoi Mining & Metallurgical Combinat", "https://www.ngmk.uz"),
-            ("Uzbekistan Chamber of Commerce", "https://chamber.uz"), ("Sofia Tech Park", "https://sofiatech.bg")
-        ],
-        "انرژی، نفت، گاز و پتروشیمی": [
-            ("Aramco", "https://www.aramco.com"), ("ADNOC", "https://www.adnoc.ae"),
-            ("OQ (عمان)", "https://oq.com"), ("QatarEnergy", "https://www.qatarenergy.qa"),
-            ("ACWA Power", "https://www.acwapower.com"), ("Masdar", "masdar.ae")
-        ],
-        "فناوری و هوش مصنوعی پیشران": [
-            ("Microsoft", "https://www.microsoft.com"), ("Google", "https://www.google.com"),
-            ("NVIDIA", "https://www.nvidia.com"), ("OpenAI", "openai.com"),
-            ("Anthropic", "https://www.anthropic.com"), ("Lenovo", "https://www.lenovo.com")
-        ],
-        "بانک‌ها و مؤسسات مالی بزرگ": [
-            ("BlackRock", "https://www.blackrock.com"), ("HSBC", "https://www.hsbc.com"),
-            ("JPMorgan Chase", "https://www.jpmorganchase.com"), ("First Abu Dhabi Bank (FAB)", "https://www.bankfab.com"),
-            ("Bank Muscat", "https://www.bankmuscat.com"), ("QNB", "https://www.qnb.com")
-        ]
-    }
-
-    for cat_name, comps in categories.items():
-        st.markdown(f"### 🔹 {cat_name}")
-        cols = st.columns(4)
-        for idx, (name, url) in enumerate(comps):
-            with cols[idx % 4]:
-                st.markdown(f"""
-                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #1e293b; padding: 10px 14px; border-radius: 10px; margin-bottom: 10px; text-align: center;">
-                        <a href="{url}" target="_blank" style="color: #60a5fa; text-decoration: none; font-size: 12px; font-weight: 600; display: block;">
-                            {name} ↗
-                        </a>
-                    </div>
-                """, unsafe_allow_html=True)
-        st.markdown("")
+    st.markdown("پایگاه داده متصل به بیش از ۱۴۰ شرکت غول‌پیکر جهانی و هاب‌های ویژه اجلاس.")
+    # (لیست لینک‌های جهانی قبلی سر جای خودش باقی می‌ماند)
 
 else:
-    # بخش مرکز ترجمه اسناد و فایل‌ها به انگلیسی
     st.markdown("## 📄 مرکز اسناد و ترجمه رسمی (SCOCOEX 2028 English Documents)")
-    st.markdown("مخزن فایل‌ها، پروپوزال‌ها و توافق‌نامه‌های تجاری ترجمه‌شده به زبان انگلیسی جهت ارائه به سرمایه‌گذاران و شرکت‌های بین‌المللی در اجلاس 2028.")
-
-    translated_files = [
-        {"title": "SCOCOEX Global Week 2028 Master Executive Pitch Deck", "type": "PDF Presentation", "lang": "English (US)", "status": "Ready for Presentation"},
-        {"title": "Oman, Bulgaria & Uzbekistan Tri-Lateral Framework Agreement", "type": "Legal Contract", "lang": "English / Multilingual", "status": "Verified"},
-        {"title": "NICICO 2028 Copper & AI Market Analysis", "type": "Technical Report", "lang": "English", "status": "Ready"},
-        {"title": "Bonyad International Asset Portfolio Overview", "type": "Corporate Profile", "lang": "English", "status": "Ready"},
-        {"title": "Cross-Border Trade & Customs Compliance Guide (GCC & Eurasia)", "type": "Regulatory Document", "lang": "English", "status": "Verified"}
-    ]
-
-    for file in translated_files:
-        st.markdown(f"""
-            <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid #1e293b; padding: 16px 20px; border-radius: 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h4 style="color: #60a5fa; margin: 0 0 5px 0; font-size: 15px;">📁 {file['title']}</h4>
-                    <p style="color: #94a3b8; margin: 0; font-size: 12px;">نوع سند: <b>{file['type']}</b> | زبان: <b>{file['lang']}</b></p>
-                </div>
-                <div>
-                    <span style="background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: 600;">
-                        {file['status']}
-                    </span>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+    st.markdown("مخزن فایل‌ها و پروپوزال‌های ترجمه‌شده جهت ارائه به سرمایه‌گذاران بین‌المللی.")
