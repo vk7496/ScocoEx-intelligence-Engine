@@ -17,19 +17,59 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------
-# Global styling: RTL + Persian font
+# Global styling: RTL text + Persian font
+#
+# IMPORTANT: we deliberately do NOT set direction:rtl on html/body or
+# on the sidebar/block-container themselves — Streamlit's own mobile
+# sidebar open/close animation relies on left-to-right transform math,
+# and forcing rtl on those structural containers breaks it (text gets
+# squeezed into a sliver on the left edge on phones). Instead we only
+# right-align and rtl-flow the actual text-bearing elements.
 # ------------------------------------------------------------------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700;900&display=swap');
 
-html, body, [class*="css"]  {
+html, body, [class*="css"] {
     font-family: 'Vazirmatn', sans-serif !important;
-    direction: rtl;
 }
-.main .block-container { direction: rtl; text-align: right; }
-section[data-testid="stSidebar"] { direction: rtl; text-align: right; }
-.stChatMessage { direction: rtl; text-align: right; }
+
+/* Right-align text content without touching layout/transform containers */
+.main .block-container p,
+.main .block-container li,
+.main .block-container h1,
+.main .block-container h2,
+.main .block-container h3,
+.main .block-container h4,
+.main .block-container span,
+.main .block-container label,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] li,
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] label,
+.stChatMessage p {
+    direction: rtl;
+    text-align: right;
+}
+
+/* Buttons: keep the button box itself normal, just flip its text */
+.stButton button, .stDownloadButton button {
+    direction: rtl;
+    text-align: right;
+}
+
+/* Chat input text should type right-to-left too */
+.stChatInput textarea, .stChatInput input {
+    direction: rtl;
+    text-align: right;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
 
 .scocoex-header { text-align: center; padding: 1.5rem 0 1rem 0; border-bottom: 1px solid #1e293b; margin-bottom: 1.5rem; }
 .scocoex-badge {
@@ -124,20 +164,42 @@ DOCS_DIR = Path(__file__).parent / "docs"
 
 
 @st.cache_data(show_spinner=False)
-def load_docs_manifest() -> list[dict]:
+def load_docs_manifest() -> dict:
+    """Returns a dict keyed by filename -> {title, desc, status}, so it's
+    easy to look up optional pretty metadata for any real file found on
+    disk. Missing manifest or bad JSON just means "no custom titles yet",
+    not "no documents" — the folder scan below is the source of truth
+    for which files actually exist."""
     manifest_path = DOCS_DIR / "manifest.json"
     if not manifest_path.exists():
-        return []
+        return {}
     try:
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        entries = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return {e.get("file", ""): e for e in entries if e.get("file")}
     except json.JSONDecodeError:
+        return {}
+
+
+IGNORED_DOC_FILES = {"manifest.json", "README.md", ".gitkeep"}
+
+
+@st.cache_data(show_spinner=False)
+def list_doc_files() -> list[str]:
+    """The real source of truth: every actual file sitting in /docs,
+    sorted by name. This is what guarantees nothing you upload ever
+    goes missing just because manifest.json doesn't mention it yet."""
+    if not DOCS_DIR.exists():
         return []
+    return sorted(
+        f.name for f in DOCS_DIR.iterdir()
+        if f.is_file() and f.name not in IGNORED_DOC_FILES
+    )
 
 # ------------------------------------------------------------------
 # Groq client
 # ------------------------------------------------------------------
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY", None)
-GROQ_MODEL = "llama-3.3-70b-versatile"  # free-tier Groq model; swap for llama-3.1-8b-instant if you want faster/cheaper
+GROQ_MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile was deprecated by Groq (June 2026); this is their recommended replacement
 
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
@@ -286,22 +348,23 @@ with tab2:
 with tab3:
     st.markdown("### 📄 مرکز اسناد و ترجمه رسمی")
     st.caption(
-        "برای افزودن سند جدید، فایل را در پوشه‌ی docs/ ریپازیتوری قرار دهید و یک "
-        "رکورد در docs/manifest.json اضافه کنید — نیازی به تغییر این کد نیست."
+        "همه‌ی فایل‌های موجود در پوشه‌ی docs/ ریپازیتوری به‌صورت خودکار اینجا لیست "
+        "می‌شوند. برای عنوان و توضیح بهتر، یک رکورد در docs/manifest.json اضافه کنید "
+        "(اختیاری) — ولی حتی بدون آن هم فایل با اسم خودش نمایش داده می‌شود."
     )
 
-    docs = load_docs_manifest()
+    manifest = load_docs_manifest()
+    filenames = list_doc_files()
 
-    if not docs:
-        st.warning("هنوز هیچ سندی در docs/manifest.json ثبت نشده است.")
+    if not filenames:
+        st.warning("هنوز هیچ فایلی در پوشه‌ی docs/ آپلود نشده است.")
     else:
-        for entry in docs:
-            filename = entry.get("file", "")
+        for filename in filenames:
+            entry = manifest.get(filename, {})
             title = entry.get("title", filename)
             desc = entry.get("desc", "")
             status = entry.get("status", "")
             file_path = DOCS_DIR / filename
-            file_exists = file_path.exists()
 
             col_info, col_action = st.columns([4, 1])
             with col_info:
@@ -312,17 +375,10 @@ with tab3:
                 </div>
                 """, unsafe_allow_html=True)
             with col_action:
-                if file_exists:
-                    st.download_button(
-                        label=f"⬇️ دانلود ({status})" if status else "⬇️ دانلود",
-                        data=file_path.read_bytes(),
-                        file_name=filename,
-                        use_container_width=True,
-                        key=f"dl_{filename}",
-                    )
-                else:
-                    st.markdown(
-                        "<div style='color:#fbbf24;font-size:0.75rem;text-align:center;padding-top:0.8rem;'>"
-                        "⏳ فایل آپلود نشده</div>",
-                        unsafe_allow_html=True,
-                    )
+                st.download_button(
+                    label=f"⬇️ دانلود ({status})" if status else "⬇️ دانلود",
+                    data=file_path.read_bytes(),
+                    file_name=filename,
+                    use_container_width=True,
+                    key=f"dl_{filename}",
+                )
