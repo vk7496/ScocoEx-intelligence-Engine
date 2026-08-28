@@ -1,0 +1,56 @@
+[
+  {
+    "region": "عمان (هاب صلح و GCC)",
+    "name": "Oman Investment Authority (OIA)",
+    "desc": "صندوق سرمایه‌گذاری حاکمیتی عمان",
+    "url": "https://oia.gov.om"
+  },
+  {
+    "region": "عمان",
+    "name": "Nama Holding",
+    "desc": "توسعه زیرساخت و انرژی",
+    "url": "https://www.nama.om"
+  },
+  {
+    "region": "عمان",
+    "name": "Asyad Group",
+    "desc": "لجستیک و زنجیره تامین یکپارچه",
+    "url": "https://www.asyad.om"
+  },
+  {
+    "region": "ازبکستان (محور انسانیت)",
+    "name": "Uzbekistan Ministry of Investment",
+    "desc": "وزارت سرمایه‌گذاری و تجارت خارجی",
+    "url": "https://mift.uz"
+  },
+  {
+    "region": "ازبکستان",
+    "name": "Uzexpocentre National Company",
+    "desc": "مرکز نمایشگاه‌های بین‌المللی تاشکند",
+    "url": "https://uzexpocentre.uz"
+  },
+  {
+    "region": "بلغارستان (اقتصاد جهانی)",
+    "name": "Bulgarian Chamber of Commerce",
+    "desc": "اتاق بازرگانی و صنعت بلغارستان",
+    "url": "https://www.bcci.bg"
+  },
+  {
+    "region": "بلغارستان / بالکان",
+    "name": "Bulgarian Industrial Association",
+    "desc": "انجمن صنعتی بلغارستان",
+    "url": "https://www.biia.com"
+  },
+  {
+    "region": "امارات متحده عربی",
+    "name": "Mubadala Investment Company",
+    "desc": "صندوق حاکمیتی ابوظبی",
+    "url": "https://www.mubadala.com"
+  },
+  {
+    "region": "عربستان سعودی",
+    "name": "Saudi Industrial Development Fund",
+    "desc": "صندوق توسعه صنعتی عربستان",
+    "url": "https://www.sidf.gov.sa"
+  }
+]
