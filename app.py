@@ -2,6 +2,7 @@ import json
 import os
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import streamlit as st
 from groq import Groq
@@ -153,6 +154,25 @@ def load_knowledge(filename: str) -> str:
 
 
 PARTNERS_TEXT = load_knowledge("partners.md")
+
+
+@st.cache_data(show_spinner=False)
+def load_partners() -> list[dict]:
+    path = KNOWLEDGE_DIR / "partners.json"
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+
+
+def logo_url_for(url: str) -> str:
+    """Fetches a company's logo at render time via Clearbit's free public
+    logo API, keyed off their domain — we never store or redistribute
+    the logo ourselves, just point the browser at it."""
+    domain = urlparse(url).netloc.removeprefix("www.")
+    return f"https://logo.clearbit.com/{domain}"
 
 # ------------------------------------------------------------------
 # Docs center — real PDF/Word files that live in /docs in this same
@@ -342,7 +362,39 @@ with tab1:
 
 # --- TAB 2 ---
 with tab2:
-    st.markdown(PARTNERS_TEXT)
+    st.markdown("### 🌐 شبکه جامع شرکا و شرکت‌های بین‌المللی")
+    st.caption(
+        "برای افزودن شریک جدید، یک رکورد در knowledge/partners.json اضافه کنید — "
+        "لوگو به‌صورت خودکار از روی آدرس سایت گرفته می‌شود."
+    )
+
+    partners = load_partners()
+
+    if not partners:
+        st.warning("هنوز هیچ شریکی در knowledge/partners.json ثبت نشده است.")
+    else:
+        cols = st.columns(3)
+        for i, p in enumerate(partners):
+            name = p.get("name", "")
+            desc = p.get("desc", "")
+            region = p.get("region", "")
+            url = p.get("url", "")
+            logo = logo_url_for(url) if url else ""
+
+            with cols[i % 3]:
+                st.markdown(f"""
+                <a href="{url}" target="_blank" style="text-decoration:none;">
+                <div class="kpi-card" style="margin-bottom:0.8rem;min-height:150px;">
+                    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+                        <img src="{logo}" onerror="this.style.display='none'"
+                             style="width:32px;height:32px;border-radius:6px;object-fit:contain;background:white;padding:2px;" />
+                        <span style="color:#fbbf24;font-size:0.7rem;font-weight:700;">{region}</span>
+                    </div>
+                    <div style="color:white;font-weight:700;font-size:0.9rem;">{name} ↗</div>
+                    <div style="color:#94a3b8;font-size:0.75rem;margin-top:0.3rem;">{desc}</div>
+                </div>
+                </a>
+                """, unsafe_allow_html=True)
 
 # --- TAB 3 ---
 with tab3:
@@ -381,4 +433,4 @@ with tab3:
                     file_name=filename,
                     use_container_width=True,
                     key=f"dl_{filename}",
-                )
+    )
